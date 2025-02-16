@@ -1,53 +1,68 @@
 from blockchain import Blockchain
 from proof_of_work import proof_of_work
-from vote_logic import add_vote
+from vote_logic import generate_voter_key, sign_voter, add_vote, count_vote
 from time import time
 
 blockchain = Blockchain()
 
-difficulty = 4
-target_time = 10 #time to get proof of work(in seconds)
+difficulty = 5
+valid_candidates = ["CandidateA", "CandidateB", "CandidateC"]
 
 def handle_vote():
     """
     handle the voting process by adding the votes to the blockchain.
-    :return: does not return anything.
     """
+    # Generate voter keys
+    private_key, public_key = generate_voter_key()
 
-    print(add_vote(blockchain, 'Voter1', 'CandidateA'))
-    print(add_vote(blockchain, 'Voter2', 'CandidateC'))
-    print(add_vote(blockchain, 'Voter1', 'CandidateB'))
+    # Sign and add votes
+    vote_data1 = {"voter_id": "Voter1", "candidate": "CandidateA"}
+    signature1 = sign_voter(private_key, vote_data1)
+    print(add_vote(blockchain, "Voter1", "CandidateA", valid_candidates, public_key, signature1))
+
+    vote_data2 = {"voter_id": "Voter2", "candidate": "CandidateB"}
+    signature2 = sign_voter(private_key, vote_data2)
+    print(add_vote(blockchain, "Voter2", "CandidateB", valid_candidates, public_key, signature2))
+
+    vote_data3 = {"voter_id": "Voter1", "candidate": "CandidateC"}
+    signature3 = sign_voter(private_key, vote_data1)
+    print(add_vote(blockchain, "Voter1", "CandidateC", valid_candidates, public_key, signature3))
 
 def mine_block():
+    """
+    Mines a new block and stores the votes into the blockchain.
+    """
     global difficulty
     if hasattr(blockchain, 'current_votes') and blockchain.current_votes:
         #get previous block and its proof of work
         previous_block = blockchain.get_previous_block()
         previous_proof = previous_block['proof']
-        start_time = time()
 
         print("Starting Proof of Work...")
         #generate new proof of work with dynamic difficulty
         new_proof = proof_of_work(previous_proof, difficulty)
         print(f"Proof of work found: {new_proof}")
-        end_time = time()
-        elapsed_time = end_time - start_time
 
-        #adjust difficulty based on the time taken to get the proof of work of the current block
-        if elapsed_time < target_time:
-            difficulty += 1
-        elif elapsed_time > target_time:
-            difficulty = max(1, difficulty - 1)
+        # Hash the previous block
+        previous_hash = blockchain.hash(previous_block)
 
         #create a new block with the valid proof of work
-        previous_hash = blockchain.hash(previous_block)
         new_block = blockchain.create_block(new_proof, previous_hash)
         new_block['votes'] = blockchain.current_votes
         blockchain.current_votes = []
 
-        print("New Block added to the blockchain with votes:", new_block)
+        # print("New Block added to the blockchain with votes:", new_block)
     else:
         print("No new vote added to the blockchain.")
+
+def display_results():
+    """
+    Display the vote counts for all candidates.
+    """
+    print("\nFinal vote counts:")
+    vote_counts = count_vote(blockchain, valid_candidates)
+    for candidate, count in vote_counts.items():
+        print(f"{candidate}: {count} votes")
 
 def main():
     print("Starting blockchain voting system...")
@@ -55,6 +70,8 @@ def main():
 
     print("\nMining Blocks...")
     mine_block()
+
+    display_results()
 
 if __name__ == '__main__':
     main()
