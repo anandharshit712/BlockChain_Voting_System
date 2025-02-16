@@ -1,8 +1,6 @@
 from flask import Flask, request, jsonify
 from flask_bcrypt import Bcrypt
-from flask_jwt_extended import JWTManager, jwt_required, create_access_token
-from keras.src.backend.jax.numpy import identity
-
+from flask_jwt_extended import JWTManager, jwt_required, create_access_token, get_jwt
 from blockchain import Blockchain
 from vote_logic import add_vote, count_vote
 import psycopg2
@@ -49,7 +47,7 @@ with get_db_connection() as conn:
     conn.commit()
 
 # ---------- AUTHENTICATION ENDPOINTS -----------
-@app.route('./register', methods=['POST'])
+@app.route('/register', methods=['POST'])
 def register():
     data = request.json
     username = data.get('username')
@@ -72,7 +70,7 @@ def register():
     except psycopg2.Error:
         return jsonify({'error': 'Username already exist'}), 400
 
-@app.route('./login', methods=['POST'])
+@app.route('/login', methods=['POST'])
 def login():
     data = request.json
     username = data.get('username')
@@ -84,20 +82,18 @@ def login():
             user = cur.fetchone()
 
             if user and bcrypt.check_password_hash(user["password"], password):
-                access_token = create_access_token(identity=user["username"])
+                access_token = create_access_token(identity=user["username"], additional_claims={"role": user["role"]})
                 return jsonify(access_token=access_token), 200
             else:
                 return jsonify({'error': 'Invalid Credentials'}), 401
 
 # ---------- ADMIN ENDPOINTS -----------
-@app.route('./admin/add-candidate', methods=['POST'])
-@jwt_required
+@app.route('/admin/add-candidate', methods=['POST'])
+@jwt_required()
 def add_candidate():
-    claims = request.get_json()
-    identity = claims.get('identity')
-    role = identity.get('role')
+    claims = get_jwt()
 
-    if role != 'admin':
+    if claims.get('role') != 'admin':
         return jsonify({'error':'Unauthorized'}), 403
 
     candidate_name = request.get_json()['name'] #edited the syntax (not the one given) check the given one for any error
@@ -107,14 +103,14 @@ def add_candidate():
     try:
         with get_db_connection() as conn:
             with conn.cursor() as cur:
-                cur.execute("INSERT INTO candidate (name) VALUES (%s)", (candidate_name,))
+                cur.execute("INSERT INTO candidates (name) VALUES (%s)", (candidate_name,))
             conn.commit()
             return jsonify({'status': 'Candidate Added Successfully'}), 201
     except psycopg2.Error:
         return jsonify({'error': 'Candidate name already exist'}), 400
 
 # ---------- VOTER ENDPOINTS -----------
-@app.route('./voter/cast-vote', methods=['POST'])
+@app.route('/voter/cast-vote', methods=['POST'])
 @jwt_required()
 def casr_vote():
     identity = request.get_json()['identity' ,{}] #edited the syntax (not the one given) check the given one for any error
@@ -135,7 +131,7 @@ def casr_vote():
     return jsonify({"message": result}), 200
 
 # ---------- RESULT ENDPOINTS -----------
-@app.route('./result', methods=['GET'])
+@app.route('/result', methods=['GET'])
 @jwt_required()
 def result():
     with get_db_connection() as conn:
